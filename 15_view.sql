@@ -108,13 +108,13 @@ ROLLBACK;
 -- 뷰를 생성할 때 사용한 조건 컬럼을 뷰를 통해서 변경할 수 없게 해주는 키워드
 CREATE OR REPLACE VIEW view_emp_test AS (
     SELECT
-    employee_id,
-    first_name,
-    last_name,
-    email,
-    hire_date,
-    job_id,
-    department_id
+        employee_id,
+        first_name,
+        last_name,
+        email,
+        hire_date,
+        job_id,
+        department_id
     FROM employees
     WHERE department_id = 60
 )
@@ -129,13 +129,13 @@ WHERE employee_id = 107;
 -- 읽기 전용 뷰 -> WITH READ ONLY (DML 연산을 이용 -> SELECT만 허용)
 CREATE OR REPLACE VIEW view_emp_test AS (
     SELECT
-    employee_id,
-    first_name,
-    last_name,
-    email,
-    hire_date,
-    job_id,
-    department_id
+        employee_id,
+        first_name,
+        last_name,
+        email,
+        hire_date,
+        job_id,
+        department_id
     FROM employees
     WHERE department_id = 60
 )
