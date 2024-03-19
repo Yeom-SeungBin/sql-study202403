@@ -57,3 +57,99 @@ SELECT * FROM tbl_user_backup;
 
 UPDATE tbl_user SET address = '인천' WHERE id = 'test01';
 DELETE FROM tbl_user WHERE id = 'test02';
+
+-- BEFORE 트리거
+CREATE OR REPLACE TRIGGER trg_user_insert
+    BEFORE INSERT
+    ON tbl_user
+    FOR EACH ROW
+BEGIN
+    -- INSERT 예정인 name의 값에서 첫 글자만 추출 후 뒤에 *을 세개 붙이겠다.
+    :NEW.name := SUBSTR(:NEW.name, 1, 1) || '***';
+END;
+
+INSERT INTO tbl_user VALUES('test04', '메롱이', '대전');
+INSERT INTO tbl_user VALUES('test05', '김오라클', '광주');
+
+ROLLBACK;
+
+--------------------------------------------------------------------------------
+
+-- 주문 히스토리
+CREATE TABLE order_history (
+    history_no NUMBER(5) PRIMARY KEY,
+    order_no NUMBER(5),
+    product_no NUMBER(5),
+    total NUMBER(10),
+    price NUMBER(10)
+);
+
+-- 상품
+CREATE TABLE product(
+    product_no NUMBER(5) PRIMARY KEY,
+    product_name VARCHAR2(20),
+    total NUMBER(5),
+    price NUMBER(5)
+);
+
+CREATE SEQUENCE order_history_seq NOCYCLE NOCACHE;
+CREATE SEQUENCE product_seq NOCYCLE NOCACHE;
+
+INSERT INTO product VALUES(product_seq.NEXTVAL, '피자', 100, 10000);
+INSERT INTO product VALUES(product_seq.NEXTVAL, '치킨', 100, 20000);
+INSERT INTO product VALUES(product_seq.NEXTVAL, '햄버거', 10, 5000);
+
+SELECT * FROM product;
+
+-- 주문 히스토리에 데이터가 들어오면 실행하는 트리거
+CREATE OR REPLACE TRIGGER trg_order_history
+    BEFORE INSERT
+    ON order_history
+    FOR EACH ROW
+DECLARE
+    v_total NUMBER;
+    v_product_no NUMBER;
+    v_product_total NUMBER;
+    quantity_shortage_exception EXCEPTION;
+    zero_total_exception EXCEPTION;
+BEGIN
+    dbms_output.put_line('트리거 실행!');
+    
+    v_total := :NEW.total; -- 주문 수량을 얻어옴.
+    v_product_no := :NEW.product_no; -- 주문 상품의 번호를 얻어옴.
+    
+    SELECT
+        total
+    INTO v_product_total
+    FROM product
+    WHERE product_no = v_product_no; -- 상품 번호를 가지고 재고 수량을 조회. -> v_product_total에 할당.
+    
+    IF v_product_total <= 0 THEN -- 재고가 없는 경우
+        RAISE zero_total_exception;
+    ELSIF v_total > v_product_total THEN -- 주문 수량이 재고 수량보다 많은 경우
+        RAISE quantity_shortage_exception;
+    END IF;
+    
+    -- 재고 수량이 넉넉하다면 주문 수량만큼 재고 수량을 조정
+    UPDATE product SET total = total - v_total
+    WHERE product_no = v_product_no;
+    
+    EXCEPTION
+        WHEN quantity_shortage_exception THEN
+            -- 오라클에서 제공하는 사용자 정의 예외를 발생시키는 함수
+            -- 첫번째 매개값: 에러 코드 (사용자 정의 예외 -20000 ~ -20999까지)
+            -- 두번째 매개값: 에러 메세지
+            RAISE_APPLICATION_ERROR(-20001, '주문하신 수량보다 재고가 적어서 주문할 수 없습니다.');
+        WHEN zero_total_exception THEN
+            RAISE_APPLICATION_ERROR(-20002, '주문하신 상품의 재고가 없어 주문할 수 없습니다.');
+END;
+
+INSERT INTO order_history VALUES(order_history_seq.NEXTVAL, 200, 1, 5, 50000);
+INSERT INTO order_history VALUES(order_history_seq.NEXTVAL, 200, 2, 1, 20000);
+INSERT INTO order_history VALUES(order_history_seq.NEXTVAL, 202, 3, 5, 25000);
+
+SELECT * FROM order_history;
+SELECT * FROM product;
+
+-- 트리거 내에서 예외가 발생하면 수행중인 INSERT 작업은 중단되며 ROLLBACK이 진행됩니다.
+INSERT INTO order_history VALUES(order_history_seq.NEXTVAL, 203, 1, 100, 1000000);
